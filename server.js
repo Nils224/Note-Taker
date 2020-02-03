@@ -1,95 +1,113 @@
-const fs = require('fs')
-const express = require('express');
-const path = require('path');
-const uuidv1 = require('uuidv1')
+// Dependencies
+// =============================================================
+const express = require("express");
+const path = require("path");
+const fs = require('fs');
+const shortid = require("shortid"); // library for creating a unique id 
 
+// Sets up the Express App
+// =============================================================
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-
+// Sets up the Express app to handle data parsing
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-app.use("/assets/css",express.static(path.join(__dirname, "public/assets/css")));
-app.use("/assets/js",express.static(path.join(__dirname, "public/assets/js"))); 
-app.use(express.static(path.join(__dirname, "./public")));
+app.use(express.static(path.join(__dirname, "public")));
 
 
-//HTML routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public/index.html'))
-});
+// Routes
+// =============================================================
 
-app.get("/index", (req, res) => {
-    res.sendFile(path.join(__dirname, "public/index.html"));
-});
+// Basic route that sends the user first to the AJAX Page
 
-app.get("/notes", (req, res) => {
-    res.sendFile(path.join(__dirname, "public/notes.html"));
+app.get("/", function(req, res) {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 
-app.get("/api/notes", (req, res)=> {
-    res.sendFile(path.join(__dirname, "db/db.json"));
+app.get("/notes", function(req, res) {
+    res.sendFile(path.join(__dirname, "public", "notes.html"));
+});
+
+// GET : Displays all Notes
+// =============================================================
+
+app.get("/api/notes", function(req, res) {
+    
+    fs.readFile("db/db.json", function(error,data) {
+        if (error) {
+            throw error;
+        };
+        let allNotes = JSON.parse(data);
+        return res.json(allNotes);
+    });
+
+});
+
+// POST : Save NEW notes in db
+// =============================================================
+
+app.post('/api/notes', (req, res) => {
+
+    fs.readFile("db/db.json", function(error, data) {
+        if (error) {
+            throw error;
+        };
+        let allNotes = JSON.parse(data);
+
+        let newNote = {
+            title: req.body.title,
+            text: req.body.text,
+            id: shortid.generate()
+        }
+
+        allNotes.push(newNote);
+    
+        fs.writeFile("db/db.json", JSON.stringify(allNotes, null, 2), (error) => {
+            if (error) {
+                throw error;
+            };
+            res.send('200');
+        });
+
+    });
+
 });
 
 
-//API routes
-app.post("/api/notes", (req, res) => {
+// DELETE : Deletes the selected note from ID and render remaining notes
+// =============================================================
 
-    let newNote = req.body;
-    newNote.id = uuidv1();
+app.delete('/api/notes/:id', (req, res) => {
+    let chosen = req.params.id;
 
-    if (!newNote) {
-        throw error
+    fs.readFile("db/db.json", function (err,data) {
+    if (err) throw err;
+    let allNotes = JSON.parse(data);
+    
+    function searchChosen(chosen, allNotes) {
+        for (var i=0; i < allNotes.length; i++) {
+            if (allNotes[i].id === chosen) {
+                allNotes.splice(i, 1);  
+            }
+        }
     }
 
-    fs.readFile(path.join(__dirname, "db/db.json"), (err, data) => {
-        if (err) {
-            throw err
-        };
+    searchChosen(chosen,allNotes);
 
-        let file = JSON.parse(data);
-
-        file.push(newNote);
-
-        fs.writeFile(path.join(__dirname, "db/db.json"), JSON.stringify(file), err => {
-            if (err) throw err;
-        });
-
-        res.json(newNote);
+    fs.writeFile("db/db.json", JSON.stringify(allNotes, null, 2), (err) => {
+        if (err) throw err;
+        res.send('200');
     });
 
-    console.log(newNote);
+  });
+
 });
 
 
-app.delete("/api/notes/:id", (req, res) => {
-    fs.readFile(path.join(__dirname, "db/db.json"), (err, data) => {
-        if (err) {
-            throw err
-        };
-
-        const notefile = JSON.parse(data);
-
-        const newFile = notefile.filter(note => note.id != req.params.id);
-        fs.writeFile(path.join(__dirname, "db/db.json"), JSON.stringify(newFile), err => {
-            if (err) {
-                throw err;
-            }
-        });
-        
-        res.sendFile(path.join(__dirname, "db/db.json"));
-    });
-
-    
+// Starts the server to begin listening
+// =============================================================
+app.listen(PORT, function() {
+    console.log("App listening on PORT " + PORT);
 });
-
-
-
-
-app.listen(PORT, () => {
-    console.log("Listening on " + PORT)
-})
-
-
